@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  autoagent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python runner.py run agent --host 0.0.0.0 --port 8000
+    environment:
+      AUTOAGENT_CONFIGS_DIR: /app/configs
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./configs:/app/configs
+      - ./data:/app/data
