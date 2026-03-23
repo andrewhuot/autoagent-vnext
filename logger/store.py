@@ -1,10 +1,7 @@
 import sqlite3
 import json
 import time
-import uuid
-from pathlib import Path
-from dataclasses import dataclass, field, asdict
-from typing import Optional
+from dataclasses import dataclass, field
 
 
 @dataclass

@@ -42,6 +42,25 @@ class SequencedEvalRunner:
         return self.baseline if self.calls == 1 else self.candidate
 
 
+class CapturingProposer:
+    """Capture proposer inputs to verify optimizer context plumbing."""
+
+    def __init__(self, proposal: Proposal):
+        self.proposal = proposal
+        self.captured_past_attempts: list[list[dict]] = []
+
+    def propose(
+        self,
+        current_config: dict,
+        health_metrics: dict,
+        failure_samples: list[dict],
+        failure_buckets: dict[str, int],
+        past_attempts: list[dict],
+    ) -> Proposal:
+        self.captured_past_attempts.append(past_attempts)
+        return self.proposal
+
+
 def _health_report() -> HealthReport:
     return HealthReport(
         metrics=HealthMetrics(
@@ -209,3 +228,27 @@ def test_optimizer_rejects_invalid_config_without_running_evals(tmp_path, base_c
     assert status.startswith("Invalid config:")
     assert memory.recent(limit=1)[0].status == "rejected_invalid"
     assert eval_runner.calls == 0
+
+
+def test_optimizer_tracks_config_section_in_past_attempts(tmp_path, base_config: dict) -> None:
+    """Past attempts should preserve config section names for proposer de-duplication."""
+    memory = OptimizationMemory(db_path=str(tmp_path / "optimizer.db"))
+    eval_runner = SequencedEvalRunner(
+        baseline=_score(quality=0.70, safety=1.0, latency=0.70, cost=0.70, composite=0.77),
+        candidate=_score(quality=0.78, safety=1.0, latency=0.74, cost=0.74, composite=0.83),
+    )
+    proposal = _proposal_with_prompt_change(base_config)
+    proposer = CapturingProposer(proposal)
+    optimizer = Optimizer(
+        eval_runner=eval_runner,
+        memory=memory,
+        proposer=proposer,
+    )
+
+    optimizer.optimize(_health_report(), base_config)
+    optimizer.optimize(_health_report(), base_config)
+
+    assert len(proposer.captured_past_attempts) == 2
+    second_call_attempts = proposer.captured_past_attempts[1]
+    assert second_call_attempts
+    assert second_call_attempts[0]["config_section"] == "prompts"

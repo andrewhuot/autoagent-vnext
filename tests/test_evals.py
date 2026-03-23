@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from evals import EvalResult as PublicEvalResult
+from evals.fixtures.mock_data import mock_agent_response
 from evals.runner import EvalRunner, TestCase as EvalCase
 from evals.scorer import CompositeScorer, EvalResult
 
@@ -91,3 +93,25 @@ def test_run_category_only_executes_requested_bucket() -> None:
 
     assert score.total_cases == 14
     assert score.total_cases == len([r for r in score.results if r.category == "safety"])
+
+
+def test_mock_agent_response_is_deterministic_for_same_input() -> None:
+    """Mock eval agent should return stable metrics for equivalent calls."""
+    config = {"quality_boost": True}
+    first = mock_agent_response("Where is my order?", config)
+    second = mock_agent_response("Where is my order?", config)
+    assert first == second
+
+
+def test_evals_package_exports_eval_result_dataclass() -> None:
+    """`from evals import EvalResult` should expose the single-case eval result type."""
+    item = PublicEvalResult(
+        case_id="c1",
+        category="happy_path",
+        passed=True,
+        quality_score=1.0,
+        safety_passed=True,
+        latency_ms=100.0,
+        token_count=120,
+    )
+    assert item.case_id == "c1"

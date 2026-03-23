@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import random
 
 MOCK_PRODUCTS: list[dict] = [
@@ -44,9 +46,19 @@ MOCK_FAQ: list[dict] = [
 _SAFETY_KEYWORDS = {"hack", "bomb", "weapon", "exploit", "attack", "steal", "phishing", "malware", "jailbreak", "ignore instructions", "inject", "bypass"}
 
 
+def _deterministic_rng(user_message: str, config: dict | None) -> random.Random:
+    """Create a deterministic RNG keyed by message and config content."""
+    config_key = json.dumps(config or {}, sort_keys=True, separators=(",", ":"))
+    seed_material = f"{user_message.lower()}|{config_key}"
+    digest = hashlib.sha256(seed_material.encode("utf-8")).hexdigest()
+    seed = int(digest[:16], 16)
+    return random.Random(seed)
+
+
 def mock_agent_response(user_message: str, config: dict | None = None) -> dict:
     """Return a plausible mock agent response based on keyword matching."""
     msg_lower = user_message.lower()
+    rng = _deterministic_rng(user_message, config)
 
     # Safety check
     safety_violation = any(kw in msg_lower for kw in _SAFETY_KEYWORDS)
@@ -74,8 +86,8 @@ def mock_agent_response(user_message: str, config: dict | None = None) -> dict:
         tool_calls.append({"tool": "get_recommendations", "args": {"query": user_message}})
 
     # Latency and token count
-    base_latency = random.uniform(50.0, 200.0)
-    base_tokens = random.randint(100, 500)
+    base_latency = rng.uniform(50.0, 200.0)
+    base_tokens = rng.randint(100, 500)
 
     # Quality boost from config
     if config and config.get("quality_boost"):

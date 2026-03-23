@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-import json
 from dataclasses import dataclass
 
 
@@ -33,6 +32,25 @@ class Proposer:
             return self._mock_propose(current_config, health_metrics, failure_buckets, past_attempts)
         return self._llm_propose(current_config, health_metrics, failure_samples, failure_buckets, past_attempts)
 
+    @staticmethod
+    def _dominant_failure_bucket(failure_buckets: dict[str, int]) -> str | None:
+        """Return dominant non-zero failure bucket, or None when no failures exist."""
+        non_zero = {bucket: count for bucket, count in failure_buckets.items() if count > 0}
+        if not non_zero:
+            return None
+        return max(non_zero, key=non_zero.get)
+
+    @staticmethod
+    def _append_unique_keywords(existing: list[str], additions: list[str]) -> list[str]:
+        """Append keywords while preserving order and avoiding duplicates."""
+        seen = set(existing)
+        merged = list(existing)
+        for keyword in additions:
+            if keyword not in seen:
+                merged.append(keyword)
+                seen.add(keyword)
+        return merged
+
     def _mock_propose(
         self,
         current_config: dict,
@@ -44,11 +62,7 @@ class Proposer:
         new_config = copy.deepcopy(current_config)
 
         # Determine the dominant failure bucket
-        dominant = (
-            max(failure_buckets, key=failure_buckets.get)
-            if failure_buckets
-            else "unhelpful_response"
-        )
+        dominant = self._dominant_failure_bucket(failure_buckets)
 
         # Track past config sections to avoid repeating the same change
         past_sections = [
@@ -65,11 +79,11 @@ class Proposer:
                     specialist = rule.get("specialist", "")
                     existing = rule.get("keywords", [])
                     if specialist == "orders" and "shipping" not in existing:
-                        rule["keywords"] = existing + ["shipping"]
+                        rule["keywords"] = self._append_unique_keywords(existing, ["shipping"])
                     elif specialist == "support" and "issue" not in existing:
-                        rule["keywords"] = existing + ["issue"]
+                        rule["keywords"] = self._append_unique_keywords(existing, ["issue"])
                     elif specialist == "recommendations" and "suggest" not in existing:
-                        rule["keywords"] = existing + ["suggest"]
+                        rule["keywords"] = self._append_unique_keywords(existing, ["suggest"])
             else:
                 # Create default routing rules
                 rules.append({"specialist": "orders", "keywords": ["order", "shipping", "track", "delivery"]})
@@ -84,7 +98,7 @@ class Proposer:
                 reasoning=f"Dominant failure bucket is routing_error. Added keywords to routing rules to improve match rate.",
             )
 
-        elif dominant == "unhelpful_response" and "prompts" not in past_sections:
+        elif (dominant == "unhelpful_response" or dominant is None) and "prompts" not in past_sections:
             # Improve system prompts to encourage more thorough responses
             prompts = new_config.setdefault("prompts", {})
             suffix = " Be thorough and detailed in your responses."

@@ -1,10 +1,10 @@
-import time
 import uuid
 from .store import ConversationStore, ConversationRecord
 
 SAFETY_KEYWORDS = ["hack", "exploit", "bomb", "weapon", "illegal", "steal", "kill"]
 ABANDON_PATTERNS = ["nevermind", "forget it", "whatever", "bye"]
 SUCCESS_PATTERNS = ["thank", "thanks", "perfect", "great", "that helps", "got it"]
+REFUSAL_PATTERNS = ["can't", "cannot", "won't", "not able", "sorry", "unable"]
 
 
 def detect_outcome(
@@ -21,9 +21,14 @@ def detect_outcome(
     user_lower = user_message.lower()
 
     # Check for safety violations in response
-    for keyword in SAFETY_KEYWORDS:
-        if keyword in response_lower:
-            return "fail"
+    mentions_harmful = any(keyword in response_lower for keyword in SAFETY_KEYWORDS)
+    refused = any(pattern in response_lower for pattern in REFUSAL_PATTERNS)
+    if mentions_harmful and not refused:
+        return "fail"
+
+    # Tool errors indicate failed fulfillment unless a top-level exception already captured.
+    if any(call.get("error") or call.get("status") == "error" for call in tool_calls):
+        return "fail"
 
     # Check for abandon patterns in user message
     for pattern in ABANDON_PATTERNS:

@@ -5,6 +5,8 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 
+import pytest
+
 from deployer.canary import CanaryManager
 from deployer.versioning import ConfigVersionManager
 from logger.store import ConversationStore
@@ -117,3 +119,12 @@ def test_canary_promotes_when_healthy(base_config: dict, tmp_path: Path) -> None
     assert "Promoted v002 to active" in action
     assert manager.manifest["active_version"] == 2
     assert manager.manifest["canary_version"] is None
+
+
+def test_version_manager_rejects_unknown_version_actions(tmp_path: Path) -> None:
+    """Promote/rollback should fail fast when an unknown version is requested."""
+    manager = ConfigVersionManager(str(tmp_path / "configs"))
+    with pytest.raises(ValueError):
+        manager.promote(999)
+    with pytest.raises(ValueError):
+        manager.rollback(999)

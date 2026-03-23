@@ -88,3 +88,42 @@ def test_observer_marks_system_for_optimization(conversation_store: Conversation
     assert report.failure_buckets["timeout"] >= 1
     assert report.failure_buckets["unhelpful_response"] >= 1
     assert report.failure_buckets["safety_violation"] >= 1
+
+
+def test_observer_failure_buckets_follow_requested_window(conversation_store: ConversationStore) -> None:
+    """Observer failure buckets should be derived from the same window as metrics."""
+    for _ in range(3):
+        conversation_store.log(
+            build_record(
+                user_message="Please write code",
+                agent_response="ok",
+                outcome="fail",
+                latency_ms=3500.0,
+                tool_calls=[{"tool": "faq", "status": "error"}],
+                specialist_used="support",
+            )
+        )
+
+    # Most recent records are healthy; window=2 should ignore the older failures above.
+    conversation_store.log(
+        build_record(
+            user_message="Where is my order?",
+            agent_response="Your order is shipped and arrives tomorrow.",
+            outcome="success",
+            safety_flags=[],
+            specialist_used="orders",
+        )
+    )
+    conversation_store.log(
+        build_record(
+            user_message="Can you recommend something similar?",
+            agent_response="Absolutely. Here are three alternatives that fit your budget.",
+            outcome="success",
+            safety_flags=[],
+            specialist_used="recommendations",
+        )
+    )
+
+    report = Observer(conversation_store).observe(window=2)
+    assert report.failure_buckets["tool_failure"] == 0
+    assert report.failure_buckets["timeout"] == 0

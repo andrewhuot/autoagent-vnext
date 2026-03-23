@@ -1,9 +1,12 @@
-import time
+"""Canary deployment orchestration and verdict execution."""
+
 import random
+import time
 from dataclasses import dataclass
-from .versioning import ConfigVersionManager
-from observer.metrics import HealthReport, compute_metrics
+
 from logger.store import ConversationStore
+
+from .versioning import ConfigVersionManager
 
 
 @dataclass
@@ -15,7 +18,7 @@ class CanaryStatus:
     canary_success_rate: float
     baseline_success_rate: float
     started_at: float
-    verdict: str  # "pending", "promote", "rollback"
+    verdict: str  # "no_canary", "pending", "promote", "rollback"
 
 
 class CanaryManager:
@@ -34,8 +37,10 @@ class CanaryManager:
         self.max_canary_duration_s = max_canary_duration_s
 
     def should_use_canary(self) -> bool:
-        """Decide if this request should use canary config (10% chance)."""
+        """Decide if this request should use canary config."""
         if self.version_manager.get_canary_config() is None:
+            return False
+        if not 0 < self.canary_percentage <= 1:
             return False
         return random.random() < self.canary_percentage
 
@@ -78,13 +83,14 @@ class CanaryManager:
 
         # Get conversations for canary and baseline versions
         canary_label = f"v{canary_ver:03d}"
-        baseline_label = f"v{active_ver:03d}" if active_ver else ""
+        baseline_label = f"v{active_ver:03d}" if active_ver else None
 
         canary_convos = []
         baseline_convos = []
         if self.store:
             canary_convos = self.store.get_by_config_version(canary_label)
-            baseline_convos = self.store.get_by_config_version(baseline_label, limit=100)
+            if baseline_label:
+                baseline_convos = self.store.get_by_config_version(baseline_label, limit=100)
 
         canary_success = sum(1 for c in canary_convos if c.outcome == "success") / max(len(canary_convos), 1)
         baseline_success = sum(1 for c in baseline_convos if c.outcome == "success") / max(len(baseline_convos), 1)
@@ -94,10 +100,14 @@ class CanaryManager:
         elapsed = time.time() - started_at
 
         if len(canary_convos) >= self.min_canary_conversations:
-            if canary_success >= baseline_success * 0.95:  # canary at least 95% as good
-                verdict = "promote"
+            if baseline_convos:
+                if canary_success >= baseline_success * 0.95:  # canary at least 95% as good
+                    verdict = "promote"
+                else:
+                    verdict = "rollback"
             else:
-                verdict = "rollback"
+                # With no baseline data, require an absolute quality bar.
+                verdict = "promote" if canary_success >= 0.7 else "rollback"
         elif elapsed > self.max_canary_duration_s:
             # Timed out -- promote if we have any data and it's decent, else rollback
             if len(canary_convos) > 0 and canary_success >= 0.7:

@@ -20,8 +20,11 @@ class Observer:
         records = self.store.get_recent(limit=window)
         metrics = compute_metrics(records)
         anomalies = self.anomaly_detector.detect(metrics)
-        failures = self.store.get_failures(limit=50)
+        failures = [record for record in records if record.outcome in {"fail", "error", "abandon"}]
         failure_buckets = self.classifier.classify_batch(failures)
+
+        # Keep baseline adaptive so anomaly sensitivity tracks evolving traffic.
+        self.anomaly_detector.update_baseline(metrics)
 
         needs_optimization = (
             len(anomalies) > 0

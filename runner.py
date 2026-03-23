@@ -57,6 +57,25 @@ def _score_to_dict(score) -> dict:
     }
 
 
+def _build_failure_samples(store: ConversationStore, limit: int = 25) -> list[dict]:
+    """Return structured recent failure samples for optimizer proposal context."""
+    samples: list[dict] = []
+    for record in store.get_failures(limit=limit):
+        samples.append(
+            {
+                "user_message": record.user_message,
+                "agent_response": record.agent_response,
+                "outcome": record.outcome,
+                "error_message": record.error_message,
+                "safety_flags": record.safety_flags,
+                "tool_calls": record.tool_calls,
+                "specialist_used": record.specialist_used,
+                "latency_ms": record.latency_ms,
+            }
+        )
+    return samples
+
+
 @click.group()
 def cli() -> None:
     """AutoAgent VNext — self-healing, self-optimizing ADK agent."""
@@ -156,7 +175,12 @@ def run_optimize(db: str, configs_dir: str, memory_db: str) -> None:
         return
 
     current_config = _ensure_active_config(deployer)
-    new_config, status = optimizer.optimize(report, current_config)
+    failure_samples = _build_failure_samples(store)
+    new_config, status = optimizer.optimize(
+        report,
+        current_config,
+        failure_samples=failure_samples,
+    )
     click.echo(f"Optimizer result: {status}")
 
     if new_config is None:
@@ -197,7 +221,12 @@ def run_loop(cycles: int, db: str, configs_dir: str, memory_db: str, delay: floa
 
         if report.needs_optimization:
             current_config = _ensure_active_config(deployer)
-            new_config, status = optimizer.optimize(report, current_config)
+            failure_samples = _build_failure_samples(store)
+            new_config, status = optimizer.optimize(
+                report,
+                current_config,
+                failure_samples=failure_samples,
+            )
             click.echo(f"  Optimizer: {status}")
             if new_config is not None:
                 score = eval_runner.run(config=new_config)

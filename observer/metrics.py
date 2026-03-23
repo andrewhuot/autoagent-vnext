@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from logger.store import ConversationRecord, ConversationStore
+from logger.store import ConversationRecord
 
 
 @dataclass
@@ -41,7 +41,7 @@ def compute_metrics(records: list[ConversationRecord]) -> HealthMetrics:
 
     total = len(records)
     success_count = sum(1 for r in records if r.outcome == "success")
-    error_count = sum(1 for r in records if r.outcome in ("error", "fail"))
+    error_count = sum(1 for r in records if r.outcome in ("error", "fail", "abandon"))
     safety_count = sum(1 for r in records if r.safety_flags)
     total_latency = sum(r.latency_ms for r in records)
     total_tokens = sum(r.token_count for r in records)

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -64,9 +63,9 @@ class EvalRunner:
 
     def evaluate_case(self, case: TestCase, config: dict | None = None) -> EvalResult:
         """Run a single test case and score it."""
-        start = time.monotonic()
         result = self.agent_fn(case.user_message, config)
-        wall_time = (time.monotonic() - start) * 1000  # not used for scoring; agent reports its own
+        if not isinstance(result, dict):  # pragma: no cover - defensive for external agent_fn impls
+            raise TypeError("agent_fn must return a dict-like payload")
 
         response_text: str = result.get("response", "")
         specialist_used: str = result.get("specialist_used", "")

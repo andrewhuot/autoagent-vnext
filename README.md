@@ -61,7 +61,24 @@ Optional flags:
 When `run agent` is running:
 
 - `GET /health`
+- `GET /dashboard`
+- `GET /api/health`
+- `GET /api/history`
+- `GET /api/config`
+- `GET /api/evals`
+- `GET /api/conversations`
 - `POST /chat`
+
+## Dashboard
+
+Visit `http://localhost:8000/dashboard` for a dark-mode monitoring UI built with Jinja2 + Tailwind CDN + Alpine.js.
+
+Screenshot description:
+
+- A slate-900 themed dashboard with an emerald/amber/rose health score hero.
+- Sparkline KPI cards for success rate, latency, error rate, safety violations, and cost per conversation.
+- Tabs for optimization history (with config diffs), active YAML config + canary state, eval breakdowns, and expandable recent conversations.
+- Styling and spacing intentionally mirrors premium DevOps tooling with subtle borders, panel shadows, and status badges.
 
 Example:
 

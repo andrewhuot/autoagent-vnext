@@ -1,9 +1,6 @@
 """Root ADK agent with keyword-based routing to specialists."""
 
 from __future__ import annotations
-
-import re
-
 from google.adk.agents import Agent
 
 from agent.config.schema import AgentConfig

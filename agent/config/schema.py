@@ -59,6 +59,7 @@ class AgentConfig(BaseModel):
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     thresholds: ThresholdsConfig = Field(default_factory=ThresholdsConfig)
     model: str = "gemini-2.0-flash"
+    quality_boost: bool = False
 
 
 def validate_config(data: dict) -> AgentConfig:
